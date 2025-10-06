@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useChat, type Message } from "ai/react";
 import { cn } from "@/lib/utils";
 
@@ -9,21 +10,34 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { ChatScrollAnchor } from "@/components/chat-scroll-anchor";
 import { useLocalChat } from "@/lib/wasmllm/use-wasm-llm";
 import { SUPPORTED_LOCAL_MODELS } from "@/lib/wasmllm/supported-models";
-import toast from 'react-hot-toast';
+import { loadNotes } from "@/lib/corpus";
+import toast from "react-hot-toast";
 
 export interface ChatProps extends React.ComponentProps<"div"> {
   initialMessages?: Message[];
   id?: string;
 }
 
-// Edit this line to change if you're calling a local model or not. Make sure to set an OPENAI_API_KEY in the env file!
+// Local model settings
 const USE_LOCAL_CHAT = true;
-// Select your local model. You might be able to hotswap this at runtime, haven't tested.
 const localModelName: keyof typeof SUPPORTED_LOCAL_MODELS = "dolphin-2.2.1";
 
 export function Chat({ id, initialMessages, className }: ChatProps) {
   const selectedModel = SUPPORTED_LOCAL_MODELS[localModelName];
-    const {
+
+  // 1) Load your NOTES from /public/corpus/*
+  const [systemNotes, setSystemNotes] = useState<string | null>(null);
+  useEffect(() => {
+    loadNotes().then(setSystemNotes).catch(() => setSystemNotes(""));
+  }, []);
+
+  // 2) Prepend NOTES as a system message
+  const seededMessages: Message[] = systemNotes
+    ? [{ id: "sys-1", role: "system", content: systemNotes }, ...(initialMessages ?? [])]
+    : initialMessages ?? [];
+
+  // 3) Use local model (free) or cloud (paid)
+  const {
     loadingMessage,
     loadingProgress,
     messages,
@@ -33,25 +47,28 @@ export function Chat({ id, initialMessages, className }: ChatProps) {
     isLoading,
     input,
     setInput,
-  // Apologies eslint this is just me showing off
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  } = USE_LOCAL_CHAT ? useLocalChat({
-    model: selectedModel,
-    initialMessages: initialMessages,
-    initialInput: "",
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  }) : {...useChat({
-    initialMessages,
-    id,
-    body: {
-      id,
-    },
-    onResponse(response) {
-      if (response.status === 401) {
-        toast.error(response.statusText)
-      }
-    }
-  }), loadingMessage: "You are now talking to a cloud model. Boo!", loadingProgress: 100};
+  } = USE_LOCAL_CHAT
+    ? useLocalChat({
+        model: selectedModel,
+        initialMessages: seededMessages,
+        initialInput: "",
+      })
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    : {
+        ...useChat({
+          initialMessages: seededMessages,
+          id,
+          body: { id },
+          onResponse(response) {
+            if (response.status === 401) {
+              toast.error(response.statusText);
+            }
+          },
+        }),
+        loadingMessage: "You are now talking to a cloud model. Boo!",
+        loadingProgress: 100,
+      };
 
   return (
     <>
