@@ -5,10 +5,21 @@ export async function loadNotes() {
     "/corpus/style.md",
     "/corpus/faq.md",
   ];
+
   const texts = await Promise.all(
     files.map((p) => fetch(p).then((r) => r.text()).catch(() => ""))
   );
-  // keep it short to avoid long prompts
+
   const joined = texts.join("\n\n").slice(0, 6000);
-  return `NOTES:\n${joined}\n\nGuidelines: Use ONLY these notes. If not covered, say you don't know.`;
+
+  return `
+You are Margaux, an experience architect and creative director.
+Voice: clear, confident, and future-focused.
+Speak in short sentences and in plain English.
+Use the NOTES below to answer questions. 
+If something isn't covered, say you don't know.
+
+NOTES:
+${joined}
+  `;
 }
